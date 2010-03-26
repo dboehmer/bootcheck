@@ -4,7 +4,7 @@
 # See man bootcheck(1) for details
 # 
 
-## Used hash algorithms
+## Used hash algorithms (security in ascending order)
 ## You must enable at least 1, more is securer but slower
 cksum=1
 md5sum=1
@@ -13,36 +13,41 @@ sha256sum=1
 sha512sum=1
 
 ## Set target which is hashed (either file, directory or block device)
+## default: directory /boot (Ever thought about the name "bootcheck", he?)
 ## 
 ## file:         single files gets hashed
-## directory:    all files get hashed and the list of files gets hashed
+## directory:    all files get hashed and the list gets hashed itself
 ## block device: the whole device gets hashed
+##               (be aware that mounting rw changes block devices!)
 ## 
+#target=/boot/grub/menu.lst
 #target=/boot/
 #target=/dev/sda1
 
 ## Set a different directory for storing recent hashes
 ## go sure the directory exists and is writeable
 ## 
-#storage=/var/lib/bootcheck
+storage=/var/lib/bootcheck
 
-## action to be performed when target was modified (default: warning)
+## action to be performed when target was modified (default: warn)
 ## can be one of
 ##   - ignore = no action (only log (if enabled -- see below))
-##   - warning = print huge warning but continue boot process
-##   - prompt = print warning and ask user for confirmation
-##   - halt = print warning and stop boot process (not implemented yet)
+##   - warn = print huge warning but continue boot process
+##   - prompt = print warning and wait for user confirmation
+##   - halt = print warning and execute "halt -f" (can cause problems)
 ## 
-#alert_action=warning
+alert_action=warn
 
 ## for action halt: set countdown until system is halted (default: 3)
 ## 
+## 0 (zero) disables countdown for immediate halt
+## 
 #halt_countdown=3
 
-## Enable logging (not implemented yet)
+## Enable logging
 ## 
 #enable_logging=1
 
 ## Set log file (default: /var/log/bootcheck.log)
 ## 
-#log_file=/var/log/bootcheck.log
+log_file=/var/log/bootcheck.log
