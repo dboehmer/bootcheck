@@ -12,8 +12,11 @@ sha1sum=1
 sha256sum=1
 sha512sum=1
 
-## Set a different target directory than /boot/
+## Set target which is hashed (either directory or block device)
+## directory: all files get hashed and the list of files gets hashed
+## block device: the whole device gets hashed
 #target=/boot/
+#target=/dev/sda1
 
 ## Set a different directory for storing recent hashes
 ## go sure the directory exists and is writeable
@@ -27,7 +30,7 @@ sha512sum=1
 ##   - halt = print warning and stop boot process (not implemented yet)
 #alert_action=warning
 
-## Enable logging
+## Enable logging (not implemented yet)
 #enable_logging=1
 
 ## Set log file (default: /var/log/bootcheck.log)

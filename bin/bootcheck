@@ -1,5 +1,5 @@
 ##!/bin/sh
-set -x
+
 ### ENVIRONMENT ###
 
 # buit-in values:
@@ -32,16 +32,27 @@ target=/boot
 # return calculated hash
 hash() {
     # $1   hash algorithm as executable file (e.g. "md5sum")
-    echo $($1 `find $target -type f` | $1 | cut -d " " -f 1)
+    
+    # target directory: hash files and hash the list of hashes
+    [ -d "$target" ] && echo $($1 `find $target -type f` | $1 | cut -d " " -f 1)
+    
+    # target block device: hash the whole device
+    [ -b "$target" ] && echo $($1 $target | cut -d " " -f 1)
 }
 
 # calculate hash and store to a file with the algorithm's name
 store() {
+    # $1   hash algorithm
+    # $tmp temporary working directory
+    
     hash $1 > "$tmp/$1"
 }
 
 # calculate current hash and compare to old hash
 check() {
+    # $1   hash algorithm
+    # $tmp temporary working directory
+    
     current=$(hash $1)
     
     # hashes are equal
@@ -64,8 +75,23 @@ alert() {
 [ -e $CONFIG_FILE ] && . $CONFIG_FILE
 
 # sanity checks on startup
-[ ! -d "$storage" ] || [ ! -w "$storage" ] && {
-    echo "Storage directory $storage does not exist or is not writeable!"
+[ ! -b "$target" ] && [ ! -d "$target" ] && {
+    echo "Error: Target is neither block device nor directory!"
+    exit $ERROR
+}
+
+[ ! -r "$target" ] && {
+    echo "Error: Target is not readable!"
+    exit $ERROR
+}
+
+[ -d "$target" ] && [ ! -x "$target" ] && {
+    echo "Error: Target directory is not accessable!"
+    exit $ERROR
+}
+
+[ ! -d "$storage" ] || [ ! -r "$storage" ] || [ ! -x "$storage" ] && {
+    echo "Error: Storage directory $storage does not exist or is not accessable or readable!"
     exit $ERROR
 }
 
@@ -100,14 +126,18 @@ if [ $# == 1 ] && [ "$1" == "--store" ]; then
         exit $ERROR
     }
     
-    # store ad
-    echo "Created by bootcheck $VERSION on $(date)" > $tmp/info
+    # store ad and information
+    echo "Created by bootcheck $VERSION on $(date)" > $tmp/README
+    echo $(date +%s) > $tmp/timestamp
+    echo $target > $tmp/target
+    echo $VERSION > $tmp/version
     
     # create hash package
     cd $tmp
     tar cf $storage/hash.tar *
     
     # delete temporary files
+    cd /
     rm -r $tmp
     
     exit $SUCCESS
@@ -134,6 +164,14 @@ if [ $# == 0 ]; then
     cd $tmp
     tar xf $storage/hash.tar
     
+    # check the stored hash tar
+    [ "$(cat $tmp/target)" == "$target" ] || {
+        echo "Error: stored hash was calculated for a different target! Store new hash before next check."
+        cd /
+        rm -r $tmp
+        exit $ERROR
+    }
+    
     # count var
     i=0
     
@@ -146,15 +184,21 @@ if [ $# == 0 ]; then
                 i=$[$i+1]
             else
                 alert
+                cd /
+                rm -r $tmp
                 exit $MOD_DETECTED
             fi
         fi
     done
     
+    # clean up
+    cd /
+    rm -r $tmp
+    
     if [ $i == 0 ]; then
         echo "Warning: Could NOT check for modifications by any algorithm due to missing hashes!" >&2
     else
-        echo "Info: Target checked by $i hash algorithms proved to be unmodified."
+        echo "Info: Target checked by $i hash algorithms and proved to be unmodified."
     fi
     
     exit $SUCCESS
