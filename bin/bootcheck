@@ -1,32 +1,5 @@
 ##!/bin/sh
 
-### ENVIRONMENT ###
-
-# buit-in values:
-ALGORITHMS="cksum md5sum sha1sum sha224sum sha256sum sha384sum sha512sum"
-CONFIG_FILE="/etc/bootcheck.conf"
-VERSION=1.0
-
-SUCCESS=0
-ERROR=1
-WARNING=2
-MOD_DETECTED=23
-
-COLUMNS=$(tput cols)
-LINES=$(tput lines)
-
-# default configurable values:
-alert_action=warning
-enable_debugging=0
-enable_logging=0
-enable_sha512sum=1
-enable_logging=0
-halt_countdown=3
-log_file=/var/log/bootcheck.log
-storage=/var/lib/bootcheck
-target=/boot
-
-
 
 ### USEFUL FUNCTIONS ###
 
@@ -57,7 +30,7 @@ check() {
     current=$(hash $1)
     
     # hashes are equal
-    [ "$current" == "$(cat $tmp/$1)" ] && return $SUCCESS
+    [ "$current" == "$(cat $tmp/$1)" ] && return $E_SUCCESS
     
     # else: modified!
     return $MOD_DETECTED
@@ -103,7 +76,7 @@ alert() {
         "ignore")
             # do nothing
             ;;
-        "warning")
+        "warn")
             warning
             ;;
         "prompt")
@@ -139,32 +112,86 @@ alert() {
     esac
 }
 
+# write something to the log file if logging enabled
+log() {
+    # $1   log entry text
+    
+    # write if logging enabled
+    [ "$enable_logging" ] && {
+        logger -f "$log_file" "$*"
+    }
+}
+
+# echo warning/error and log it
+e() {
+    # $1   warning or error message
+    echo $1
+    log $1
+}
+
 
 ### STARTUP ###
 
+# default config values:
+alert_action="warning"
+config_file="/etc/bootcheck.conf"
+enable_debugging=0
+enable_logging=0
+enable_sha512sum=1
+enable_logging=0
+halt_countdown=3
+log_file="/var/log/bootcheck.log"
+storage="/var/lib/bootcheck"
+target="/boot"
+
 # load values given in config file if exists
 # syntax is just like shell and can be sourced
-[ -e $CONFIG_FILE ] && . $CONFIG_FILE
+[ -e $config_file ] && . $config_file
 
-# sanity checks on startup
+# buit-in values:
+ALGORITHMS="cksum md5sum sha1sum sha224sum sha256sum sha384sum sha512sum"
+VERSION="1.0"
+FILE_FORMAT_VERSION="1.0"
+
+# return values
+E_SUCCESS=0
+E_ERROR=1
+E_WARNING=2
+MOD_DETECTED=23
+
+# store terminal dimensions
+COLUMNS=$(tput cols)
+LINES=$(tput lines)
+
+
+# sanity checks on startup:
+
+# $target file/directory/device
 [ ! -b "$target" ] && [ ! -d "$target" ] && [ ! -f "$target" ] && {
-    echo "Error: Target is neither block device nor directory nor regular file!"
-    exit $ERROR
+    e "Error: Target is neither block device nor directory nor regular file!"
+    exit $E_ERROR
 }
 
 [ -r "$target" ] || {
-    echo "Error: Target is not readable!"
-    exit $ERROR
+    e "Error: Target is not readable!"
+    exit $E_ERROR
 }
 
 [ -d "$target" ] && [ ! -x "$target" ] && {
-    echo "Error: Target directory is not accessable!"
-    exit $ERROR
+    e "Error: Target directory is not accessable!"
+    exit $E_ERROR
 }
 
+# $storage file
 ([ -d "$storage" ] && [ -r "$storage" ] && [ -x "$storage" ]) || {
-    echo "Error: Storage directory $storage does not exist or is not accessable or readable!"
-    exit $ERROR
+    e "Error: Storage directory $storage does not exist or is not accessable or readable!"
+    exit $E_ERROR
+}
+
+# $log_file
+touch $log_file
+[ -w "$log_file" ] || {
+    e "Warning: Log file \"$log_file\" is not writable!"
 }
 
 
@@ -175,16 +202,16 @@ if [ $# == 1 ] && [ "$1" == "--store" ]; then
     
     # check if target is empty and abort if so
     [ "$(ls -A $target)" ] || {
-        echo "Error: $target directory empty!" >&2
-        exit $ERROR
+        e "Error: $target directory empty!" >&2
+        exit $E_ERROR
     }
     
     # create temporary directory
     tmp=$(mktemp --directory "/tmp/bootcheck.XXXXXXXXXX")
 
     [ -z $tmp ] && {
-        echo "Error: Creation of temporary dir failed!" >&2
-        return $ERROR
+        e "Error: Creation of temporary dir failed!" >&2
+        return $E_ERROR
     }
     
     # run any algorithm enabled by config (default: only sha512sum)
@@ -193,33 +220,34 @@ if [ $# == 1 ] && [ "$1" == "--store" ]; then
     done
 
     [ $(ls -1A $tmp | wc -l) == 0 ] && {
-        echo "Error: No hashes created!" >&2
+        e "Error: No hashes created!" >&2
         rmdir $tmp
-        exit $ERROR
+        exit $E_ERROR
     }
     
     # store ad and information
-    echo "Created by bootcheck $VERSION on $(date)" > $tmp/README
+    echo "Created by bootcheck $VERSION on $(date)\n\nSee http://github.com/dboehmer/bootcheck for details" > $tmp/README
     echo $(date +%s) > $tmp/timestamp
     echo $target > $tmp/target
+    echo $FILE_FORMAT_VERSION > $tmp/file_format_version
     echo $VERSION > $tmp/version
     
     # create hash package
     cd $tmp
     tar cf $storage/hash.tar *
     
-    [ "$?" ] && {
-        echo "Error: creation of hash tar failed!"
+    [ "$?" == 0 ] || {
+        e "Error: creation of hash tar failed!"
         cd /
         rm -r $tmp
-        exit $ERROR
+        exit $E_ERROR
     }
     
     # delete temporary files
     cd /
     rm -r $tmp
     
-    exit $SUCCESS
+    exit $E_SUCCESS
 fi
 
 
@@ -228,27 +256,35 @@ fi
 
 if [ $# == 0 ]; then
     if [ ! -e "$storage/hash.tar" ]; then
-        echo "Warning: No hash stored yet -- cannot check target!" >&2
-        exit $WARNING
+        e "Warning: No hash stored yet -- cannot check target!" >&2
+        exit $E_WARNING
     fi
     
     tmp=$(mktemp --directory "/tmp/bootcheck.XXXXXXXXXX")
 
     [ -z $tmp ] && {
-        echo "Error: Creation of temporary dir failed!" >&2
-        return $ERROR
+        e "Error: Creation of temporary dir failed!" >&2
+        return $E_ERROR
     }
     
     # extract old hash tar
     cd $tmp
     tar xf $storage/hash.tar
     
-    # check the stored hash tar
-    [ "$(cat $tmp/target)" == "$target" ] || {
-        echo "Error: stored hash was calculated for a different target! Store new hash before next check."
+    # check the archive: file format
+    [[ "$(cat $tmp/file_format_version)" == 1.* ]] || {
+        e "Error: stored hash tar has different version of file format which is not compatible with this program version!"
         cd /
         rm -r $tmp
-        exit $ERROR
+        exit $E_ERROR
+    }
+    
+    # check the stored hash: target
+    [ "$(cat $tmp/target)" == "$target" ] || {
+        e "Error: stored hash was calculated for a different target! Store new hash before next check."
+        cd /
+        rm -r $tmp
+        exit $E_ERROR
     }
     
     # count var
@@ -258,10 +294,13 @@ if [ $# == 0 ]; then
     for algorithm in $ALGORITHMS; do
         if [ -e "$tmp/$algorithm" ] && [ $(type -P $algorithm) ]; then
             check $algorithm
-            if [ "$?" == "$SUCCESS" ]; then
+            if [ "$?" == "$E_SUCCESS" ]; then
                 # increase number of checks
                 i=$[$i+1]
+                
+                log "Info: Successfully checked target \"$target\" by $algorithm"
             else
+                log "WARNING: DETECTED MODIFICATIONS ON TARGET \"$target\"!"
                 alert
                 cd /
                 rm -r $tmp
@@ -275,11 +314,11 @@ if [ $# == 0 ]; then
     rm -r $tmp
     
     if [ $i == 0 ]; then
-        echo "Warning: Could NOT check for modifications by any algorithm due to missing hashes!" >&2
-        exit $WARNING
+        e "Warning: Could NOT check for modifications by any algorithm due to missing hashes!" >&2
+        exit $E_WARNING
     else
         echo "Info: Target checked by $i hash algorithms and proved to be unmodified."
-        exit $SUCCESS
+        exit $E_SUCCESS
     fi
 fi
 
@@ -293,4 +332,4 @@ echo "Usage: $0 [--store]
     --store  calculate hash of target and store it
              for recognizing modifications later on" >&2
 
-exit $ERROR
+exit $E_ERROR
