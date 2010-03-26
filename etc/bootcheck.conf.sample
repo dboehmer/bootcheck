@@ -1,0 +1,34 @@
+#
+# Configuration file of bootcheck program
+# 
+# See man bootcheck(1) for details
+# 
+
+## Used hash algorithms
+## You must enable at least 1, more is securer but slower
+cksum=1
+md5sum=1
+sha1sum=1
+sha256sum=1
+sha512sum=1
+
+## Set a different target directory than /boot/
+#target=/boot/
+
+## Set a different directory for storing recent hashes
+## go sure the directory exists and is writeable
+#storage=/var/lib/bootcheck
+
+## action to be performed when target was modified (default: warning)
+## can be one of
+##   - ignore = no action (only log (if enabled -- see below))
+##   - warning = print huge warning but continue boot process
+##   - prompt = print warning and ask user for confirmation
+##   - halt = print warning and stop boot process (not implemented yet)
+#alert_action=warning
+
+## Enable logging
+#enable_logging=1
+
+## Set log file (default: /var/log/bootcheck.log)
+#log_file=/var/log/bootcheck.log
