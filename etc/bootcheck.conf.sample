@@ -12,14 +12,18 @@ sha1sum=1
 sha256sum=1
 sha512sum=1
 
-## Set target which is hashed (either directory or block device)
-## directory: all files get hashed and the list of files gets hashed
+## Set target which is hashed (either file, directory or block device)
+## 
+## file:         single files gets hashed
+## directory:    all files get hashed and the list of files gets hashed
 ## block device: the whole device gets hashed
+## 
 #target=/boot/
 #target=/dev/sda1
 
 ## Set a different directory for storing recent hashes
 ## go sure the directory exists and is writeable
+## 
 #storage=/var/lib/bootcheck
 
 ## action to be performed when target was modified (default: warning)
@@ -28,10 +32,17 @@ sha512sum=1
 ##   - warning = print huge warning but continue boot process
 ##   - prompt = print warning and ask user for confirmation
 ##   - halt = print warning and stop boot process (not implemented yet)
+## 
 #alert_action=warning
 
+## for action halt: set countdown until system is halted (default: 3)
+## 
+#halt_countdown=3
+
 ## Enable logging (not implemented yet)
+## 
 #enable_logging=1
 
 ## Set log file (default: /var/log/bootcheck.log)
+## 
 #log_file=/var/log/bootcheck.log

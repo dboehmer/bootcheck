@@ -16,11 +16,12 @@ COLUMNS=$(tput cols)
 LINES=$(tput lines)
 
 # default configurable values:
-action=warning
+alert_action=warning
 enable_debugging=0
 enable_logging=0
 enable_sha512sum=1
 enable_logging=0
+halt_countdown=3
 log_file=/var/log/bootcheck.log
 storage=/var/lib/bootcheck
 target=/boot
@@ -62,9 +63,80 @@ check() {
     return $MOD_DETECTED
 }
 
+# print horizontal line of "#"s
+line() {
+    n=1
+    [ -n $1 ] && n=$1
+    
+    for i in $(seq 1 $n); do
+        for col in $(seq 1 $COLUMNS); do
+            echo -n "#"
+        done
+    done
+}
+
+# echo text centered
+cecho() {
+    # $1   text to be printed
+    
+    word="$1"
+    while [ ${#word} -lt $COLUMNS ]; do
+        word="$word ";
+        if [ ${#word} -lt $COLUMNS ]; then
+            word=" $word"
+        fi;
+    done;
+    echo "$word";
+}
+
+# print warning (alert)
+warning() {
+    line 2
+    cecho "YOUR SYSTEM HAS BEEN MODIFIED."
+    cecho "BE AWARE YOUR ENCRYPTION COULD BE BROKEN."
+    line 2
+}
+
 # alert -- do action defined in config
 alert() {
-    echo "WOOHHHAAAAAA" >&2
+    case "$alert_action" in
+        "ignore")
+            # do nothing
+            ;;
+        "warning")
+            warning
+            ;;
+        "prompt")
+            warning
+            # read input until users types "YES"
+            input=""
+            until [ "$input" == "YES" ]; do
+                echo "Are you sure you want to continue boot process? (Propably dangerous!)"
+                echo "(Type uppercase yes)"
+                read input
+            done
+            ;;
+        "halt")
+            warning
+            
+            # countdown if enabled
+            if [ "$halt_countdown" -gt 0 ]; then
+                for remaining in $(seq $halt_countdown -1 1); do
+                    echo "Halting system in $remaining seconds -- press any key to abort!"
+                    
+                    # wait for 1 second OR user input
+                    read -n 1 -t 1 input && {
+                        # ask the magic question
+                        echo "Are you sure you want to continue boot process? (Propably dangerous!)"
+                        echo "(Type uppercase yes)"
+                        read input
+                        [ "$input" == "YES" ] && return
+                    }
+                done
+            fi
+            
+            halt -f
+    esac
 }
 
 
