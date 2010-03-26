@@ -288,9 +288,9 @@ fi
 
 echo "Usage: $0 [--store]
 
-    no args  check target directory now and print warning if modified
+    no args  check target now and trigger alert if it was modified
 
-    --store  calculate hash of target directory and store it
+    --store  calculate hash of target and store it
              for recognizing modifications later on" >&2
 
 exit $ERROR
