@@ -36,8 +36,8 @@ hash() {
     # target directory: hash files and hash the list of hashes
     [ -d "$target" ] && echo $($1 `find $target -type f` | $1 | cut -d " " -f 1)
     
-    # target block device: hash the whole device
-    [ -b "$target" ] && echo $($1 $target | cut -d " " -f 1)
+    # target block device or regular file: hash the whole device
+    ([ -b "$target" ] || [ -f "$target" ]) && echo $($1 $target | cut -d " " -f 1)
 }
 
 # calculate hash and store to a file with the algorithm's name
@@ -75,12 +75,12 @@ alert() {
 [ -e $CONFIG_FILE ] && . $CONFIG_FILE
 
 # sanity checks on startup
-[ ! -b "$target" ] && [ ! -d "$target" ] && {
-    echo "Error: Target is neither block device nor directory!"
+[ ! -b "$target" ] && [ ! -d "$target" ] && [ ! -f "$target" ] && {
+    echo "Error: Target is neither block device nor directory nor regular file!"
     exit $ERROR
 }
 
-[ ! -r "$target" ] && {
+[ -r "$target" ] || {
     echo "Error: Target is not readable!"
     exit $ERROR
 }
@@ -90,7 +90,7 @@ alert() {
     exit $ERROR
 }
 
-[ ! -d "$storage" ] || [ ! -r "$storage" ] || [ ! -x "$storage" ] && {
+([ -d "$storage" ] && [ -r "$storage" ] && [ -x "$storage" ]) || {
     echo "Error: Storage directory $storage does not exist or is not accessable or readable!"
     exit $ERROR
 }
@@ -135,6 +135,13 @@ if [ $# == 1 ] && [ "$1" == "--store" ]; then
     # create hash package
     cd $tmp
     tar cf $storage/hash.tar *
+    
+    [ "$?" ] && {
+        echo "Error: creation of hash tar failed!"
+        cd /
+        rm -r $tmp
+        exit $ERROR
+    }
     
     # delete temporary files
     cd /
