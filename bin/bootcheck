@@ -204,11 +204,11 @@ if [ $# == 0 ]; then
     
     if [ $i == 0 ]; then
         echo "Warning: Could NOT check for modifications by any algorithm due to missing hashes!" >&2
+        exit $WARNING
     else
         echo "Info: Target checked by $i hash algorithms and proved to be unmodified."
+        exit $SUCCESS
     fi
-    
-    exit $SUCCESS
 fi
 
 
